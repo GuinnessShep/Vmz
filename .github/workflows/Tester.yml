@@ -1,0 +1,52 @@
+name: Ubuntu Docker with Remote Desktop
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  setup-ubuntu-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Create Dockerfile
+        run: |
+          echo 'FROM ubuntu:20.04
+          
+          ENV DEBIAN_FRONTEND=noninteractive
+          RUN apt-get update && apt-get install -y wget curl xrdp tasksel jq kubuntu-desktop jq xterm && \
+              echo -e "root:ilovedogshit" | chpasswd && \
+              echo "startkde" > ~/.xsession && \
+              sed -i.bak '/fi/a #xrdp multiple users configuration \n startkde \n' /etc/xrdp/startwm.sh && \
+              service xrdp start && \
+              wget https://bin.equinox.io/c/VdrWdbjqyF/ngrok-stable-linux-amd64.zip && \
+              unzip ngrok-stable-linux-amd64.zip && \
+              ./ngrok authtoken 2N5KFYmyocPObelDKx26R1e2gfP_MiFweWSd9A8CbrC1E9Ef
+
+          COPY entrypoint.sh /entrypoint.sh
+          RUN chmod +x /entrypoint.sh
+          
+          EXPOSE 3389
+
+          ENTRYPOINT ["/entrypoint.sh"]' > Dockerfile
+          
+      - name: Create entrypoint.sh
+        run: |
+          echo '#!/bin/bash
+          
+          /usr/sbin/xrdp-sesman --nodaemon &
+          /usr/sbin/xrdp --nodaemon &
+          
+          ./ngrok tcp 3389 &' > entrypoint.sh
+          chmod +x entrypoint.sh
+
+      - name: Build and run Docker image
+        run: |
+          docker build -t ubuntu-remote-desktop .
+          docker run -d -p 3389:3389 ubuntu-remote-desktop
